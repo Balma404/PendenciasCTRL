@@ -23,5 +23,8 @@ yarn-error.log*
 .env*.local
 .env
 
+# uploads (fotos enviadas em runtime)
+/uploads
+
 # typescript / next
 next-env.d.ts

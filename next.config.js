@@ -1,14 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "firebasestorage.googleapis.com",
-      },
-    ],
-  },
+  // Gera build "standalone" para uma imagem Docker enxuta.
+  output: "standalone",
 };
 
 module.exports = nextConfig;

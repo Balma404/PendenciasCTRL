@@ -1,80 +1,61 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc,
-} from "firebase/firestore";
-import {
-  deleteObject,
-  getDownloadURL,
-  ref as storageRef,
-  uploadBytes,
-} from "firebase/storage";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { db, storage } from "../lib/firebase";
 import ParticipantForm from "../components/ParticipantForm";
 import ParticipantCard from "../components/ParticipantCard";
 
-const COLLECTION = "participantes";
+const POLL_INTERVAL = 3000; // atualização "em tempo real" via polling
 
 export default function Home() {
   const [participants, setParticipants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState(null);
+  const firstLoad = useRef(true);
 
-  // Lista em tempo real com onSnapshot.
-  useEffect(() => {
-    const q = query(collection(db, COLLECTION), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        setParticipants(
-          snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
-        );
-        setLoading(false);
-      },
-      (err) => {
-        console.error(err);
+  const fetchParticipants = useCallback(async () => {
+    try {
+      const res = await fetch("/api/participants", { cache: "no-store" });
+      if (!res.ok) throw new Error("Falha ao carregar");
+      const data = await res.json();
+      setParticipants(data);
+      setError(null);
+    } catch (err) {
+      console.error(err);
+      if (firstLoad.current) {
         setError(
-          "Não foi possível carregar os dados. Verifique a configuração do Firebase em .env.local."
+          "Não foi possível carregar os dados. Verifique se o PostgreSQL está rodando (DATABASE_URL)."
         );
-        setLoading(false);
       }
-    );
-    return () => unsubscribe();
+    } finally {
+      firstLoad.current = false;
+      setLoading(false);
+    }
   }, []);
 
-  // Adiciona participante: faz upload da foto (se houver) e salva no Firestore.
+  // Lista "em tempo real": busca inicial + polling periódico.
+  useEffect(() => {
+    fetchParticipants();
+    const interval = setInterval(fetchParticipants, POLL_INTERVAL);
+    return () => clearInterval(interval);
+  }, [fetchParticipants]);
+
   async function handleAdd({ nome, file }) {
     setAdding(true);
     setError(null);
     try {
-      let photoURL = "";
-      let photoPath = "";
+      const formData = new FormData();
+      formData.append("nome", nome);
+      if (file) formData.append("file", file);
 
-      if (file) {
-        photoPath = `participantes/${Date.now()}-${file.name}`;
-        const fileRef = storageRef(storage, photoPath);
-        await uploadBytes(fileRef, file);
-        photoURL = await getDownloadURL(fileRef);
-      }
-
-      await addDoc(collection(db, COLLECTION), {
-        nome,
-        photoURL,
-        photoPath,
-        pendencias: 0,
-        createdAt: serverTimestamp(),
+      const res = await fetch("/api/participants", {
+        method: "POST",
+        body: formData,
       });
+      if (!res.ok) throw new Error("Falha ao adicionar");
+
+      await fetchParticipants();
     } catch (err) {
       console.error(err);
       setError("Erro ao adicionar participante. Tente novamente.");
@@ -84,31 +65,39 @@ export default function Home() {
   }
 
   async function updatePendencias(participant, delta) {
-    const next = Math.max(0, (participant.pendencias ?? 0) + delta);
+    // Atualização otimista para resposta imediata na UI.
+    setParticipants((prev) =>
+      prev.map((p) =>
+        p.id === participant.id
+          ? { ...p, pendencias: Math.max(0, p.pendencias + delta) }
+          : p
+      )
+    );
     try {
-      await updateDoc(doc(db, COLLECTION, participant.id), { pendencias: next });
+      await fetch(`/api/participants/${participant.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delta }),
+      });
     } catch (err) {
       console.error(err);
       setError("Erro ao atualizar pendências.");
+      fetchParticipants();
     }
   }
 
   async function handleDelete(participant) {
     if (!confirm(`Remover ${participant.nome}?`)) return;
+    setParticipants((prev) => prev.filter((p) => p.id !== participant.id));
     try {
-      await deleteDoc(doc(db, COLLECTION, participant.id));
-      if (participant.photoPath) {
-        await deleteObject(storageRef(storage, participant.photoPath)).catch(
-          () => {}
-        );
-      }
+      await fetch(`/api/participants/${participant.id}`, { method: "DELETE" });
     } catch (err) {
       console.error(err);
       setError("Erro ao remover participante.");
+      fetchParticipants();
     }
   }
 
-  // Resumo por nível para o cabeçalho.
   const resumo = useMemo(() => {
     const r = { baixo: 0, medio: 0, critico: 0 };
     for (const p of participants) {

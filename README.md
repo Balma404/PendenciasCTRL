@@ -1,58 +1,71 @@
 # Dashboard de Pendências
 
-SPA construída com **Next.js (App Router)**, **Firebase Firestore**, **Firebase Storage** e **Tailwind CSS** para controlar as pendências de participantes em tempo real.
+SPA construída com **Next.js (App Router)**, **PostgreSQL**, **Docker** e **Tailwind CSS** para controlar as pendências de participantes.
 
 ## Funcionalidades
 
-- **Upload de imagem**: ao cadastrar um participante, a foto é enviada para o Firebase Storage e a URL gerada é salva no documento do Firestore.
-- **Lista em tempo real**: usa `onSnapshot` — a lista atualiza instantaneamente, sem recarregar a página.
+- **Upload de imagem**: ao cadastrar um participante, a foto é enviada via API e salva em um volume de uploads; a URL fica registrada no PostgreSQL.
+- **Lista atualizada em tempo real**: o front faz *polling* a cada 3s (`/api/participants`), refletindo mudanças sem recarregar a página.
 - **Status por cor** conforme o número de pendências:
   - 🟢 **Verde** — 0 a 3 (Baixo)
   - 🟡 **Amarelo** — 4 a 7 (Médio)
   - 🔴 **Vermelho** — 8 ou mais (Crítico)
-- **Botões `+` / `−`** em cada card para ajustar as pendências manualmente.
+- **Botões `+` / `−`** em cada card para ajustar as pendências (com atualização otimista).
 - **Avatar circular**, layout limpo, moderno e **responsivo**.
 
-## Como rodar
-
-1. Instale as dependências:
-
-   ```bash
-   npm install
-   ```
-
-2. Crie um projeto no [Firebase](https://console.firebase.google.com/), habilite **Firestore Database** e **Storage**, e copie as credenciais do app web.
-
-3. Copie o arquivo de exemplo e preencha com suas credenciais:
-
-   ```bash
-   cp .env.local.example .env.local
-   ```
-
-4. Rode em modo de desenvolvimento:
-
-   ```bash
-   npm run dev
-   ```
-
-   Acesse [http://localhost:3000](http://localhost:3000).
-
-## Estrutura
+## Arquitetura
 
 ```
 app/
-  layout.js          # Layout raiz + metadata
-  page.js            # Página principal (SPA) com lógica do Firestore/Storage
-  globals.css        # Tailwind
+  api/
+    participants/route.js          # GET (listar) e POST (criar + upload)
+    participants/[id]/route.js     # PATCH (ajustar pendências) e DELETE
+    uploads/[filename]/route.js    # serve as imagens do volume de uploads
+  page.js                          # SPA (fetch + polling)
+  layout.js, globals.css
 components/
-  ParticipantForm.js # Formulário: Nome + Foto + Adicionar
-  ParticipantCard.js # Card com avatar, status e botões +/-
+  ParticipantForm.js               # Nome + Foto + Adicionar
+  ParticipantCard.js               # avatar, status e botões +/-
 lib/
-  firebase.js        # Inicialização do Firebase
-  status.js          # Regras de cor por nível de pendências
+  db.js                            # pool do PostgreSQL + schema idempotente
+  uploads.js                       # gravação/leitura das fotos
+db/
+  init.sql                         # schema inicial (Postgres no Docker)
+Dockerfile, docker-compose.yml
 ```
 
-## Regras de segurança (sugestão para desenvolvimento)
+## Como rodar com Docker (recomendado)
 
-No Firestore e no Storage, durante o desenvolvimento você pode liberar o acesso.
-**Em produção, configure regras de autenticação adequadas.**
+Sobe o app + PostgreSQL com um comando:
+
+```bash
+docker compose up --build
+```
+
+Acesse [http://localhost:3000](http://localhost:3000). O banco e as fotos ficam em volumes persistentes (`pgdata` e `uploads`).
+
+## Como rodar localmente (sem Docker)
+
+1. Tenha um PostgreSQL acessível e crie o banco `pendencias`.
+2. Configure o ambiente:
+
+   ```bash
+   cp .env.example .env
+   # ajuste DATABASE_URL se necessário
+   ```
+
+3. Instale e rode:
+
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+   A tabela é criada automaticamente na primeira consulta (`lib/db.js`).
+
+## Variáveis de ambiente
+
+| Variável        | Descrição                                   | Padrão                                                  |
+| --------------- | ------------------------------------------- | ------------------------------------------------------ |
+| `DATABASE_URL`  | String de conexão com o PostgreSQL          | `postgres://postgres:postgres@localhost:5432/pendencias` |
+| `UPLOADS_DIR`   | Diretório onde as fotos são gravadas        | `./uploads`                                            |
