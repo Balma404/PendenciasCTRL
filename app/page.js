@@ -98,10 +98,11 @@ export default function Home() {
   }
 
   const resumo = useMemo(() => {
-    const r = { baixo: 0, medio: 0, critico: 0, total: participants.length };
+    const r = { zerado: 0, baixo: 0, medio: 0, critico: 0, total: participants.length };
     for (const p of participants) {
       const c = p.pendencias ?? 0;
-      if (c >= 8) r.critico += 1;
+      if (c <= 0) r.zerado += 1;
+      else if (c >= 8) r.critico += 1;
       else if (c >= 4) r.medio += 1;
       else r.baixo += 1;
     }
@@ -125,6 +126,10 @@ export default function Home() {
 
             {/* Pills de resumo */}
             <div className="flex flex-wrap gap-2">
+              <div className="flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
+                <span className="text-xs font-semibold text-sky-300">Zerado: {resumo.zerado}</span>
+              </div>
               <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                 <span className="text-xs font-semibold text-emerald-300">Baixo: {resumo.baixo}</span>
