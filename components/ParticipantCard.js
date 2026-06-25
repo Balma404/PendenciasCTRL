@@ -37,7 +37,7 @@ export default function ParticipantCard({
 
   return (
     <div
-      className={`group relative flex flex-col gap-5 rounded-2xl border-2 p-6 transition-all duration-300 hover:scale-[1.03] ${status.card} ${status.glow}`}
+      className={`group relative flex flex-col gap-5 rounded-2xl border-4 p-6 transition-all duration-300 hover:scale-[1.03] ${status.card} ${status.glow}`}
     >
       {/* Botão remover */}
       <button
