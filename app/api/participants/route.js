@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const { rows } = await query(
-      "SELECT * FROM participantes ORDER BY created_at DESC"
+      "SELECT * FROM participantes ORDER BY pendencias DESC, created_at DESC"
     );
     return NextResponse.json(rows.map(mapParticipant));
   } catch (err) {

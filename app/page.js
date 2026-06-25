@@ -13,6 +13,15 @@ export default function Home() {
   const [error, setError] = useState(null);
   const firstLoad = useRef(true);
 
+  // Ordena por pendências (desc); quem tem mais fica no topo.
+  function ordenar(list) {
+    return [...list].sort(
+      (a, b) =>
+        b.pendencias - a.pendencias ||
+        new Date(b.createdAt) - new Date(a.createdAt)
+    );
+  }
+
   const fetchParticipants = useCallback(async () => {
     try {
       const res = await fetch("/api/participants", { cache: "no-store" });
@@ -55,10 +64,12 @@ export default function Home() {
 
   async function updatePendencias(participant, delta) {
     setParticipants((prev) =>
-      prev.map((p) =>
-        p.id === participant.id
-          ? { ...p, pendencias: Math.max(0, p.pendencias + delta) }
-          : p
+      ordenar(
+        prev.map((p) =>
+          p.id === participant.id
+            ? { ...p, pendencias: Math.max(0, p.pendencias + delta) }
+            : p
+        )
       )
     );
     try {
